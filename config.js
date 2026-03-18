@@ -1,8 +1,8 @@
+require('dotenv').config();
+
 module.exports = {
-    'secretKey': '12345-67890-09876-54321',
-    'mongoUrl': 'mongodb://localhost:27017/conFusion',
-    'facebook': {
-        clientId: '1356798395093268',
-        clientSecret: '65ddb8cc2513400210bb002a16f45bdc'
-    }
-}
+  database: process.env.DATABASE_URL || 'postgresql://localhost:5432/case_tracker_dev',
+  secretKey: process.env.JWT_SECRET || 'default-dev-secret',
+  port: process.env.PORT || 3000,
+  env: process.env.NODE_ENV || 'development'
+};
