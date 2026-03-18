@@ -1,83 +1,51 @@
-var express = require('express');
-const bodyParser = require('body-parser');
-var User = require('../models/user');
-var passport = require('passport');
-var authenticate = require('../authenticate');
-var cors = require('./cors');
-var router = express.Router();
-router.use(bodyParser.json());
+const express = require('express');
+const router = express.Router();
+const User = require('../models/User');
+const authenticate = require('../authenticate');
 
-/* GET users listing. */
-router.route('/')
-  .get(cors.corsWithOptions, authenticate.verifyUser, authenticate.verifyAdmin, (req, res, next) => {
-    User.find({})
-      .then((User) => {
-        res.statusCode = 200;
-        res.setHeader('Content-Type', 'application/json');
-        res.json(User);
-      }, (err) => next(err))
-      .catch((err) => next(err));
-  });
+// POST /users/signup
+router.post('/signup', async (req, res, next) => {
+  try {
+    const { username, email, password, firstname, lastname } = req.body;
 
-router.post('/signup', cors.corsWithOptions, (req, res, next) => {
-  User.register(new User({ username: req.body.username }),
-    req.body.password, (err, user) => {
-      if (err) {
-        res.statusCode = 500;
-        res.setHeader('Content-Type', 'application/json');
-        res.json({ err: err });
-      }
-      else {
-        if (req.body.firstname)
-          user.firstname = req.body.firstname;
-        if (req.body.lastname)
-          user.lastname = req.body.lastname;
-        user.save((err, user) => {
-          if (err) {
-            res.statusCode = 500;
-            res.setHeader('Content-Type', 'application/json');
-            res.json({ err: err });
-            return;
-          }
-          passport.authenticate('local')(req, res, () => {
-            res.statusCode = 200;
-            res.setHeader('Content-Type', 'application/json');
-            res.json({ success: true, status: 'Registration Successful!' });
-          });
-        });
-      }
-    });
-});
+    const existing = await User.findByUsername(username);
+    if (existing) {
+      return res.status(409).json({ error: 'Username already exists' });
+    }
 
-router.post('/login', cors.corsWithOptions, passport.authenticate('local'), (req, res) => {
-
-  var token = authenticate.getToken({ _id: req.user._id });
-  res.statusCode = 200;
-  res.setHeader('Content-Type', 'application/json');
-  res.json({ success: true, token: token, status: 'You are successfully logged in!' });
-});
-
-
-router.get('/logout', (req, res) => {
-  if (req.session) {
-    req.session.destroy();
-    res.clearCookie('session-id');
-    res.redirect('/');
-  }
-  else {
-    var err = new Error('You are not logged in!');
-    err.status = 403;
+    const user = await User.create({ username, email, password, firstname, lastname, role: 'viewer' });
+    const token = authenticate.getToken(user);
+    res.status(201).json({ success: true, token, user: { id: user.id, username: user.username, role: user.role } });
+  } catch (err) {
     next(err);
   }
 });
 
-router.get('/facebook/token', passport.authenticate('facebook-token'), (req, res) => {
-  if (req.user) {
-    var token = authenticate.getToken({ _id: req.user._id });
-    res.statusCode = 200;
-    res.setHeader('Content-Type', 'application/json');
-    res.json({ success: true, token: token, status: 'You are successfully logged in!' });
+// POST /users/login
+router.post('/login', async (req, res, next) => {
+  try {
+    const { username, password } = req.body;
+    const user = await User.findByUsername(username);
+
+    if (!user || !(await User.verifyPassword(password, user.password_hash))) {
+      return res.status(401).json({ error: 'Invalid username or password' });
+    }
+
+    const token = authenticate.getToken(user);
+    res.json({ success: true, token, user: { id: user.id, username: user.username, role: user.role } });
+  } catch (err) {
+    next(err);
   }
-})
+});
+
+// GET /users (admin only)
+router.get('/', authenticate.verifyUser, authenticate.verifyAdmin, async (req, res, next) => {
+  try {
+    const users = await User.findAll();
+    res.json(users);
+  } catch (err) {
+    next(err);
+  }
+});
 
 module.exports = router;
