@@ -2,6 +2,7 @@ const chai = require('chai');
 const chaiHttp = require('chai-http');
 const app = require('../app');
 const db = require('../db/knex');
+const { redis } = require('../db/redis');
 const bcrypt = require('bcryptjs');
 const authenticate = require('../authenticate');
 
@@ -38,6 +39,9 @@ const testUsers = {
 
 // DB 초기화 — 각 테스트 파일 시작 전에 호출
 async function resetDB() {
+  // 테스트 시작 전 Redis 캐시 전부 비우기
+  await redis.flushdb();
+
   await db('notes').del();
   await db('cases').del();
   await db('users').del();
@@ -120,6 +124,7 @@ module.exports = {
   expect,
   chai,
   db,
+  redis,
   testUsers,
   resetDB,
   getToken,
